@@ -1,7 +1,7 @@
 # install ROS2 Humble
 ARG ROS_VERSION=humble
-ARG ROS_SETUP_PATH=/opt/ros/${ROS_VERSION}/setup.bash
 FROM osrf/ros:${ROS_VERSION}-desktop
+ARG ROS_VERSION
 
 RUN apt-get update && apt-get -y upgrade
 RUN apt-get -y install python3-pip python-is-python3
@@ -31,7 +31,7 @@ RUN git clone --branch develop https://github.com/Arcanain/arcanain_tutorial.git
 
 # ビルドプロセス
 WORKDIR /root/ros2_ws
-RUN /bin/bash -c "source ${ROS_SETUP_PATH} && colcon build"
+RUN /bin/bash -c "source /opt/ros/${ROS_VERSION}/setup.bash && colcon build"
 
 # 環境設定
 RUN echo "source /opt/ros/${ROS_VERSION}/setup.bash" >> ~/.bashrc
