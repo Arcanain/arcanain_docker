@@ -75,7 +75,7 @@ RUN git clone --branch develop https://github.com/Arcanain/arcanain_tutorial.git
 
 # Build ROS2 packages
 WORKDIR /root/ros2_ws
-RUN /bin/bash -c "source /opt/ros/${ROS_VERSION}/setup.bash && colcon build"
+RUN /bin/bash -c "source /opt/ros/${ROS_VERSION}/setup.bash && colcon build --parallel-workers 1"
 
 # Set up environment
 RUN echo "source /opt/ros/${ROS_VERSION}/setup.bash" >> ~/.bashrc
