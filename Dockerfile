@@ -1,38 +1,49 @@
-# install ROS2 Humble
-ARG ROS_VERSION=humble
-FROM osrf/ros:${ROS_VERSION}-desktop
-ARG ROS_VERSION
+# Use the official ROS image as the base image
+FROM ros:humble-ros-core-jammy
 
-RUN apt-get update && apt-get -y upgrade
-RUN apt-get -y install python3-pip python-is-python3
+# Set shell for running commands
+SHELL ["/bin/bash", "-c"]
 
-# Gazeboの公式パッケージリポジトリを追加
-RUN apt-get install -y lsb-release wget gnupg && \
-    wget https://packages.osrfoundation.org/gazebo.gpg -O /usr/share/keyrings/pkgs-osrf-archive-keyring.gpg && \
-    echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/pkgs-osrf-archive-keyring.gpg] http://packages.osrfoundation.org/gazebo/ubuntu-stable $(lsb_release -cs) main" | tee /etc/apt/sources.list.d/gazebo-stable.list > /dev/null
+# install bootstrap tools
+RUN apt-get update && apt-get install --no-install-recommends -y \
+    build-essential \
+    git \
+    python3-colcon-common-extensions \
+    python3-colcon-mixin \
+    python3-rosdep \
+    python3-vcstool \
+    && rm -rf /var/lib/apt/lists/*
 
-# GazeboとROS 2 Humbleの関連パッケージをインストール
-RUN apt-get install -y \
-  ignition-fortress \
-  ros-humble-ros-gz-sim \
-  ros-humble-ros-ign-bridge
+# bootstrap rosdep
+RUN rosdep init && \
+  rosdep update --rosdistro $ROS_DISTRO
 
-# rviz描画関連パッケージをインストール
-RUN apt-get install -y \
-  ros-humble-joint-state-publisher \
-  ros-humble-joint-state-publisher-gui \
-  ros-humble-robot-state-publisher
+# setup colcon mixin and metadata
+RUN colcon mixin add default \
+      https://raw.githubusercontent.com/colcon/colcon-mixin-repository/master/index.yaml && \
+    colcon mixin update && \
+    colcon metadata add default \
+      https://raw.githubusercontent.com/colcon/colcon-metadata-repository/master/index.yaml && \
+    colcon metadata update
 
-# 作業ディレクトリを設定
-WORKDIR /root/ros2_ws/src
-RUN git clone --branch develop https://github.com/Arcanain/arcanain_tutorial.git \
-    && git clone https://github.com/Arcanain/arcanain_simulator.git \
-    && git clone https://github.com/Arcanain/keyboard_teleop.git
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ros-humble-desktop=0.10.0-1* \
+    && rm -rf /var/lib/apt/lists/*
 
-# ビルドプロセス
-WORKDIR /root/ros2_ws
-RUN /bin/bash -c "source /opt/ros/${ROS_VERSION}/setup.bash && colcon build"
 
-# 環境設定
-RUN echo "source /opt/ros/${ROS_VERSION}/setup.bash" >> ~/.bashrc
-RUN echo "source /root/ros2_ws/install/setup.bash" >> ~/.bashrc
+# (3) 一般ユーザを作成 (例: ubuntu)
+#     -u 1000, -g 1000 はホストのUID/GIDと合わせるとパーミッションの衝突が少なくなる
+RUN useradd -m -s /bin/bash -u 1000 ubuntu \
+    && echo "ubuntu ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
+
+# (4) 以降は一般ユーザubuntuで作業
+USER ubuntu
+WORKDIR /home/ubuntu
+
+# (5) ROSのsetupを毎回読み込ませたければ、~/.bashrc に追記する等の方法がある
+# 例：
+# RUN echo "source /opt/ros/${ROS_DISTRO}/setup.bash" >> /home/ubuntu/.bashrc
+
+
+# Set the entrypoint to source ROS setup.bash and run a bash shell
+CMD ["/bin/bash"]
