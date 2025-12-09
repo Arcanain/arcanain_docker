@@ -5,7 +5,7 @@ FROM ros:humble-ros-core-jammy
 SHELL ["/bin/bash", "-c"]
 
 # install bootstrap tools
-RUN apt-get update && apt-get install --no-install-recommends -y \
+RUN apt update && apt install --no-install-recommends -y \
     build-essential \
     git \
     python3-colcon-common-extensions \
@@ -26,8 +26,10 @@ RUN colcon mixin add default \
       https://raw.githubusercontent.com/colcon/colcon-metadata-repository/master/index.yaml && \
     colcon metadata update
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
+RUN apt update && apt install -y --no-install-recommends \
     ros-humble-desktop=0.10.0-1* \
+    ros-humble-joint-state-publisher \
+    ros-humble-joint-state-publisher-gui \
     && rm -rf /var/lib/apt/lists/*
 
 
@@ -42,7 +44,7 @@ WORKDIR /home/ubuntu
 
 # (5) ROSのsetupを毎回読み込ませたければ、~/.bashrc に追記する等の方法がある
 # 例：
-# RUN echo "source /opt/ros/${ROS_DISTRO}/setup.bash" >> /home/ubuntu/.bashrc
+RUN echo "source /opt/ros/${ROS_DISTRO}/setup.bash" >> /home/ubuntu/.bashrc
 
 
 # Set the entrypoint to source ROS setup.bash and run a bash shell

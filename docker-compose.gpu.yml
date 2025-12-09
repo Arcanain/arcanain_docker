@@ -1,0 +1,47 @@
+# Usage:
+#   # 通常はリポジトリ直下で:
+#   #   ./setup.sh up -d --build   # ROS_PROJECT_PATH defaults to /home/<user>/ros2_docker and is auto-created
+#   # 環境変数を変えたい場合は:
+#   #   export ROS_DEV_CONTAINER_NAME=ros2_dev_container   # 任意のコンテナ名
+#   #   export ROS_PROJECT_PATH=/absolute/path/to/ros2_ws  # ユーザーごとに違うホスト側パス
+#   #   docker compose -f docker-compose.gpu.yml up -d --build
+# 上の環境変数はホストのROSプロジェクトをコンテナ内の/home/ubuntu/ros2_ws/にマウントするために使われます。
+# 未設定時は /home/<user>/ros2_docker を作成してマウントします。
+
+services:
+  ros_dev_env:
+    container_name: ${ROS_DEV_CONTAINER_NAME}
+    image: ${ROS_DEV_CONTAINER_NAME}
+    build: ./
+    volumes:
+      # ホストのROS2ワークスペースをコンテナの/home/ubuntu/ros2_ws/にマウント
+      # 例) export ROS_PROJECT_PATH=/Users/you/dev/ros2_ws
+      - ${ROS_PROJECT_PATH:-/home/${USER:-user}/ros2_docker}:/home/ubuntu/ros2_ws/
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw
+    environment:
+      # Use host X11 (WSLg) and favor direct rendering for RViz
+      - DISPLAY=${DISPLAY}
+      - LIBGL_ALWAYS_INDIRECT=0
+      - QT_X11_NO_MITSHM=1
+      # Enable GPU passthrough
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility,graphics
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - capabilities: [gpu]   # WSL2 + NVIDIA対応（docker compose v2で有効）
+    working_dir: /home/ubuntu/ros2_ws
+    # Keep the container running, fix mount ownership, and pre-source ROS (and workspace if built)
+    command: >
+      bash -lc "sudo chown -R ubuntu:ubuntu /home/ubuntu/ros2_ws || true
+      && source /opt/ros/${ROS_DISTRO:-humble}/setup.bash
+      && if [ -f install/setup.bash ]; then source install/setup.bash; fi
+      && tail -f /dev/null"
+    networks:
+      - x11
+    stdin_open: true
+    tty: true
+
+networks:
+  x11:

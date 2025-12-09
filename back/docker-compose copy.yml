@@ -1,0 +1,42 @@
+services:
+  ros_dev_env:
+    container_name: ${ROS_DEV_CONTAINER_NAME}
+    image: ${ROS_DEV_CONTAINER_NAME}
+    build: ./
+    volumes:
+      - ${ROS_PROJECT_PATH}:/home/ubuntu/ros2_ws/
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw
+    environment:
+      # ローカル(Wslg)のX11を使う（初期値）
+      - DISPLAY=${DISPLAY}
+
+      # GPU開放
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=all
+
+      # fallback: indirect rendering
+      - LIBGL_ALWAYS_INDIRECT=1
+
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - capabilities: [gpu]   # WSL2 + NVIDIA対応
+    networks:
+      - x11
+    stdin_open: true
+    tty: true
+
+  novnc:
+    image: theasp/novnc:latest
+    environment:
+      - DISPLAY_WIDTH=2560
+      - DISPLAY_HEIGHT=1440
+    ports:
+      - "8080:8080"
+    networks:
+      - x11
+    restart: on-failure
+
+networks:
+  x11:

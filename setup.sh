@@ -1,30 +1,69 @@
-## Author: Adeeb Abbas
-# This script sets up the ros_dev function in the bashrc file.
+#!/usr/bin/env bash
+set -euo pipefail
 
-# Get the absolute path to the script directory
+# Auto-set env vars and run docker compose so new folks don't need to export them each time
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# Adds the following function to the bashrc file:
+# Track whether user explicitly set ROS_PROJECT_PATH
+USER_SET_ROS_PROJECT_PATH="${ROS_PROJECT_PATH+yes}"
 
-echo "Adding ros_dev function to bashrc file"
+# Defaults (can be overridden by existing env)
+export ROS_DEV_CONTAINER_NAME="${ROS_DEV_CONTAINER_NAME:-ros2_dev_container2}"
+# Default workspace under /home/<user>/ros2_docker (overridable via env)
+export ROS_PROJECT_PATH="${ROS_PROJECT_PATH:-/home/${USER:-user}/ros2_docker}"
+USE_GPU="${USE_GPU:-auto}"
 
-echo 'ros_dev() {
-  # Check if the correct number of arguments were provided
-  if (( $# % 2 != 0 )); then
-    echo "Usage: ros_dev <container_name1> <project_path1> [<container_name2> <project_path2> ...]"
-    return 1
+# Normalize to absolute path if possible (tolerate missing path)
+if command -v realpath >/dev/null 2>&1; then
+  export ROS_PROJECT_PATH="$(realpath -m "${ROS_PROJECT_PATH}")"
+fi
+
+if [[ ! -d "${ROS_PROJECT_PATH}" ]]; then
+  if [[ -z "${USER_SET_ROS_PROJECT_PATH}" ]]; then
+    echo "Creating default workspace at ${ROS_PROJECT_PATH}"
+    mkdir -p "${ROS_PROJECT_PATH}"
+  else
+    echo "ROS_PROJECT_PATH does not exist: ${ROS_PROJECT_PATH}" >&2
+    exit 1
   fi
+fi
 
-  while (( $# >= 2 )); do
-    # Set environment variables
-    export ROS_DEV_CONTAINER_NAME=$1
-    export ROS_PROJECT_PATH=$2
-    shift 2
+GPU_COMPOSE_FILE="${SCRIPT_DIR}/docker-compose.gpu.yml"
+CPU_COMPOSE_FILE="${SCRIPT_DIR}/docker-compose.cpu.yml"
+GPU_DETECTED="no"
+COMPOSE_MODE="CPU"
 
-    # Run docker-compose from the correct directory
-    cd "$SCRIPT_DIR" && docker-compose up -d --build
-  done
-}
-' >> "$HOME/.bashrc"
+if command -v nvidia-smi >/dev/null 2>&1 && nvidia-smi -L >/dev/null 2>&1; then
+  GPU_DETECTED="yes"
+fi
 
-echo "Done"
+case "${USE_GPU}" in
+  1|true|TRUE|yes|YES)
+    COMPOSE_FILE="${GPU_COMPOSE_FILE}"
+    COMPOSE_MODE="GPU"
+    ;;
+  0|false|FALSE|no|NO)
+    COMPOSE_FILE="${CPU_COMPOSE_FILE}"
+    ;;
+  *)
+    if [[ "${GPU_DETECTED}" == "yes" ]]; then
+      COMPOSE_FILE="${GPU_COMPOSE_FILE}"
+      COMPOSE_MODE="GPU"
+    else
+      COMPOSE_FILE="${CPU_COMPOSE_FILE}"
+    fi
+    ;;
+esac
+
+if [[ ! -f "${COMPOSE_FILE}" ]]; then
+  echo "Compose file not found: ${COMPOSE_FILE}" >&2
+  exit 1
+fi
+
+echo "Using ROS_DEV_CONTAINER_NAME=${ROS_DEV_CONTAINER_NAME}"
+echo "Using ROS_PROJECT_PATH=${ROS_PROJECT_PATH}"
+echo "GPU detected: ${GPU_DETECTED} (override with USE_GPU=1/0)"
+echo "Compose mode: ${COMPOSE_MODE}"
+echo "Compose file: ${COMPOSE_FILE}"
+
+exec docker compose -f "${COMPOSE_FILE}" "$@"
